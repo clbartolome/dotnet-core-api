@@ -1,0 +1,89 @@
+apiVersion: v1
+kind: Template
+labels:
+  app: ${APPLICATION_NAME}
+objects:
+
+# -- Deployment Config --
+- apiVersion: apps.openshift.io/v1
+  kind: DeploymentConfig
+  metadata:
+    name: ${APPLICATION_NAME}
+    namespace: ${PROJECT_NAME}
+  spec:
+    replicas: 1
+    selector:
+      deploymentconfig: ${APPLICATION_NAME}
+    strategy:
+      type: Rolling
+    template:
+      metadata:
+        labels:
+          app: ${APPLICATION_NAME}
+          deploymentconfig: ${APPLICATION_NAME}
+          technology: dotnet
+      spec:
+        containers:
+        - image: image-registry.openshift-image-registry.svc:5000/${PROJECT_NAME}/${IMAGE_STREAM_NAME}:${IMAGE_TAG}
+          imagePullPolicy: Always
+          name: ${APPLICATION_NAME}
+          ports:
+          - containerPort: 5000
+            protocol: TCP
+          resources: {}
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+        dnsPolicy: ClusterFirst
+        restartPolicy: Always
+        schedulerName: default-scheduler
+        securityContext: {}
+        terminationGracePeriodSeconds: 30
+    test: false
+    triggers:
+    - type: ConfigChange
+
+# -- Service --
+- apiVersion: v1
+  kind: Service
+  metadata:
+    name: ${APPLICATION_NAME}
+    namespace: ${PROJECT_NAME}
+  spec:
+    ports:
+    - port: 8080
+      protocol: TCP
+      targetPort: 5000
+    selector:
+      deploymentconfig: ${APPLICATION_NAME}
+
+# -- Route --
+- apiVersion: route.openshift.io/v1
+  kind: Route
+  metadata:
+    name: ${APPLICATION_NAME}
+    namespace: ${PROJECT_NAME}
+  spec:
+    port:
+      targetPort: 5000
+    to:
+      kind: Service
+      name: ${APPLICATION_NAME}
+      weight: 100
+      
+parameters:
+- description: Name of the project where the application has to be deployed
+  displayName: Project name
+  name: PROJECT_NAME
+  required: true
+- description: Name of the application
+  displayName: Application name
+  name: APPLICATION_NAME
+  required: true
+- description: Name of the image stream where to pull the docker image from (with no tag)
+  displayName: Image stream name
+  name: IMAGE_STREAM_NAME
+  required: true
+- description: Tag of the image stream to deploy as the version of the application for this deployment
+  displayName: Image Tag
+  name: IMAGE_TAG
+  required: true
